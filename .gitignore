@@ -1,0 +1,5 @@
+compile_commands.json
+include/eos
+lib/*
+.cache
+build
