@@ -19,8 +19,6 @@ const char *values[] = {
   "SKIRMISH", "PERMISSION", "STATE", 0
 };
 
-const char *deadbeef = "-2000";
-
 int compare_str(const char *s) {
   for (int i = 0; values[i]; i++)
     if (!strcmp(s, values[i]))
@@ -29,27 +27,16 @@ int compare_str(const char *s) {
   return 0;
 }
 
-int is_ok(const char *s) {
-  if (s[0] == '-' && s[1] == 0) {
-    return 0;
-  }
-
-  int i = 0;
-  if (s[0] == '-') i++;
-  for (; s[i]; i++)
-    if (!(isdigit(s[i]) || s[i] == '-'))
-      return 0;
-
-  return 1;
-}
-
-EOS_EResult __stdcall hcopy(EOS_HLobbyDetails handle, const EOS_LobbyDetails_CopyAttributeByIndexOptions* opts, EOS_Lobby_Attribute ** out) {
+EOS_EResult __stdcall hcopy(EOS_HLobbyDetails handle, const EOS_LobbyDetails_CopyAttributeByIndexOptions *opts, EOS_Lobby_Attribute **out) {
   auto res = orig(handle, opts, out);
 
   if (!(int)res) {
     auto data = (*out)->Data;
-    if (compare_str(data->Key) && ((int)data->ValueType == 3) && !is_ok(data->Value.AsUtf8))
-      data->Value.AsUtf8 = deadbeef;
+    if (compare_str(data->Key) && ((int)data->ValueType == 3)) {
+      // magic we compare later
+      data->Value.AsInt64 = -2000;
+      data->ValueType = EOS_ELobbyAttributeType::EOS_AT_INT64;
+    }
   }
 
   return res;
@@ -60,18 +47,9 @@ void Plugin_Init() {
   auto fn = GetProcAddress(h,  "_EOS_LobbyDetails_CopyAttributeByIndex@12");
   orig = (copy_t)fn;
 
-  // i asked chatgpt for this
-  copy_t *target = (copy_t *)0x00c021cc;
-  DWORD old;
-  uintptr_t page = (uintptr_t)target & ~(0x1000 - 1);
-  VirtualProtect((void *)page, 0x1000, PAGE_EXECUTE_READWRITE, &old);
-  *target = &hcopy;
-  VirtualProtect((void *)page, 0x1000, old, &old);
-  FlushInstructionCache(GetCurrentProcess(), target, 0x1000);
-
-  //MH_Initialize();
-  //MH_CreateHook(fn, (void*)&hcopy, (void**)&orig);
-  //MH_EnableHook(fn);
+  MH_Initialize();
+  MH_CreateHook(fn, (void*)&hcopy, (void**)&orig);
+  MH_EnableHook(fn);
 }
 
 bool Plugin_Unload() { return false; }
@@ -88,4 +66,4 @@ SBLT_API_EXPORT const char *MODULE_LICENCE_DECLARATION =
     "This module is licenced under the GNU GPL version 2 or later, or another "
     "compatible licence";
 SBLT_API_EXPORT const char *MODULE_SOURCE_CODE_LOCATION = "https://github.com/viw-ty/payday-engine-fixes";
-SBLT_API_EXPORT const char *MODULE_SOURCE_CODE_REVISION = "1.1";
+SBLT_API_EXPORT const char *MODULE_SOURCE_CODE_REVISION = "1.2";
