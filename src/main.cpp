@@ -5,6 +5,7 @@
 #include "superblt_flat.h"
 
 #include "string.h"
+#include <stdint.h>
 #include <ctype.h>
 
 typedef EOS_EResult (__stdcall *copy_t)(EOS_HLobbyDetails handle, const EOS_LobbyDetails_CopyAttributeByIndexOptions* opts, EOS_Lobby_Attribute ** out);
@@ -35,7 +36,7 @@ int is_ok(const char *s) {
 
   int i = 0;
   if (s[0] == '-') i++;
-  for (int i = 0; s[i]; i++)
+  for (; s[i]; i++)
     if (!(isdigit(s[i]) || s[i] == '-'))
       return 0;
 
@@ -57,10 +58,20 @@ EOS_EResult __stdcall hcopy(EOS_HLobbyDetails handle, const EOS_LobbyDetails_Cop
 void Plugin_Init() {
   auto h = LoadLibraryA("EOSSDK-Win32-Shipping.dll");
   auto fn = GetProcAddress(h,  "_EOS_LobbyDetails_CopyAttributeByIndex@12");
+  orig = (copy_t)fn;
 
-  MH_Initialize();
-  MH_CreateHook(fn, (void*)&hcopy, (void**)&orig);
-  MH_EnableHook(fn);
+  // i asked chatgpt for this
+  copy_t *target = (copy_t *)0x00c021cc;
+  DWORD old;
+  uintptr_t page = (uintptr_t)target & ~(0x1000 - 1);
+  VirtualProtect((void *)page, 0x1000, PAGE_EXECUTE_READWRITE, &old);
+  *target = &hcopy;
+  VirtualProtect((void *)page, 0x1000, old, &old);
+  FlushInstructionCache(GetCurrentProcess(), target, 0x1000);
+
+  //MH_Initialize();
+  //MH_CreateHook(fn, (void*)&hcopy, (void**)&orig);
+  //MH_EnableHook(fn);
 }
 
 bool Plugin_Unload() { return false; }
